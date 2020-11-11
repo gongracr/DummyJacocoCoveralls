@@ -1,0 +1,3 @@
+include ':dummylib'
+include ':app'
+rootProject.name = "DummyTest"
