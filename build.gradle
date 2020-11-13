@@ -4,34 +4,98 @@ buildscript {
     repositories {
         google()
         jcenter()
-
-        // Needed to resolve the Jacoco plugin snapshot dependency
-        maven { url "https://oss.sonatype.org/content/repositories/snapshots" }
     }
 
     dependencies {
         classpath "com.android.tools.build:gradle:4.0.1"
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-        classpath "com.vanniktech:gradle-android-junit-jacoco-plugin:0.17.0-SNAPSHOT"
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
     }
 }
 
-///////// JaCoCo + Coveralls //////////
 plugins {
-    id 'jacoco'
     id("com.github.nbaztec.coveralls-jacoco") version "1.2.4"
 }
 
-apply plugin: "com.vanniktech.android.junit.jacoco"
+//////////////////////////////////////// JaCoCo + Coveralls ///////////////////////////////////////
 
-coverallsJacoco {
-    reportPath = "$buildDir/reports/jacoco/jacoco.xml)" // default: "build/reports/jacoco/test/jacocoTestReport.xml"
-//    reportSourceSets += "" // optional, default: main
-    apiEndpoint = "" // optional, default: https://coveralls.io/api/v1/jobs
+// ignore any subproject, if required `subprojects.findAll{ it.name != 'customSubProject' }`
+def coveredProjects = subprojects
+
+// configure() method takes a list as an argument and applies the configuration to the projects in this list.
+configure(coveredProjects) { p ->
+    p.evaluate()
+
+    // Here we apply jacoco plugin to every project
+    apply plugin: 'jacoco'
+    // Set Jacoco version
+    jacoco {
+        toolVersion = "0.8.5"
+    }
+
+    // Here we create the task to generate Jacoco report
+    // It depends to unit test task we don't have to manually running unit test before the task
+    task jacocoReport(type: JacocoReport, dependsOn: 'test') {
+
+        // Define what type of report we should generate
+        // If we don't want to process the data further, html should be enough
+        reports {
+            xml.enabled = true
+            html.enabled = true
+        }
+
+        // Setup the .class, source, and execution directories
+        final fileFilter = ['**/R.class', '**/R$*.class', '**/BuildConfig.*', '**/Manifest*.*', 'android/**/*.*']
+
+        sourceDirectories.setFrom files(["${p.projectDir}/src/main/java"])
+        classDirectories.setFrom files([fileTree(dir: "${p.buildDir}/classes", excludes: fileFilter)])
+        executionData.setFrom fileTree(dir: p.buildDir, includes: [
+                'jacoco/*.exec', 'outputs/code-coverage/connected/*coverage.ec'
+        ])
+    }
 }
+
+apply plugin: 'jacoco'
+apply plugin: 'com.github.nbaztec.coveralls-jacoco'
+
+task jacocoFullReport(type: JacocoReport, group: 'Coverage reports') {
+    def projects = coveredProjects
+
+    // Here we depend on the jacocoReport task that we created before
+    dependsOn(projects.jacocoReport)
+
+    final source = files(projects.jacocoReport.sourceDirectories)
+
+    additionalSourceDirs.setFrom source
+    sourceDirectories.setFrom source
+
+    classDirectories.setFrom files(projects.jacocoReport.classDirectories)
+    executionData.setFrom files(projects.jacocoReport.executionData)
+
+    reports {
+        html {
+            enabled true
+            destination file("$buildDir/reports/jacoco/html")
+        }
+        xml {
+            enabled true
+            destination file("$buildDir/reports/jacoco/jacocoFullReport.xml")
+        }
+    }
+
+    doFirst {
+        executionData.setFrom files(executionData.findAll { it.exists() })
+    }
+
+    coverallsJacoco {
+        reportPath = "$buildDir/reports/jacoco/jacocoFullReport.xml"
+        reportSourceSets = projects.jacocoReport.sourceDirectories.collect { it.getFiles() }.flatten()
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 allprojects {
     repositories {

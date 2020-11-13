@@ -1,9 +1,11 @@
+import io.gongracr.dummylib.MyDummyClass
 import junit.framework.Assert.assertEquals
 import org.junit.Test
 
 class MyDummyClassTest {
     @Test
-    fun addition_isCorrect() {
-        assertEquals(4, 2 + 2)
+    fun `calculates square correctly`() {
+        val aSquare = MyDummyClass().calculateSquare(4)
+        assertEquals(16, aSquare)
     }
 }
